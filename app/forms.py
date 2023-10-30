@@ -18,6 +18,7 @@ Example:
 from datetime import datetime
 from typing import cast
 
+
 from flask_wtf import FlaskForm
 from wtforms import (
     BooleanField,

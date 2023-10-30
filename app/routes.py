@@ -10,6 +10,8 @@ from flask import flash, redirect, render_template, send_from_directory, url_for
 
 from app import app, sqlite
 from app.forms import CommentsForm, FriendsForm, IndexForm, PostForm, ProfileForm
+from werkzeug.security import generate_password_hash
+
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -41,16 +43,30 @@ def index():
         elif user["password"] == login_form.password.data:
             return redirect(url_for("stream", username=login_form.username.data))
 
-    elif register_form.is_submitted() and register_form.submit.data:
-        insert_user = f"""
-            INSERT INTO Users (username, first_name, last_name, password)
-            VALUES ('{register_form.username.data}', '{register_form.first_name.data}', '{register_form.last_name.data}', '{register_form.password.data}');
-            """
-        sqlite.query(insert_user)
-        flash("User successfully created!", category="success")
-        return redirect(url_for("index"))
+    elif register_form.validate_on_submit():  # This checks submission and validates inputs
+        # Create a hashed version of the password
+        hashed_password = generate_password_hash(register_form.password.data, method='sha256')
+
+        try:
+            # Use parameter substitution to prevent SQL injection
+            # '?' is a placeholder for a value that we want to insert into the database
+            # Each '?' will be replaced by the corresponding element from the tuple provided as the second argument
+            insert_user = """
+                INSERT INTO Users (username, first_name, last_name, password)
+                VALUES (?, ?, ?, ?);
+                """
+            sqlite.execute(insert_user, (register_form.username.data, register_form.first_name.data, register_form.last_name.data, hashed_password))  # Executes the SQL command safely
+
+            flash("User successfully created!", category="success")
+            return redirect(url_for("index"))
+
+        except Exception as e:  # It's better to catch specific exceptions such as sqlite3.IntegrityError for a duplicate username.
+            flash(str(e), category="error")  # You might want to customize the error message.
+
+        # If there is any failure, the code execution will continue here and render the template.
 
     return render_template("index.html.j2", title="Welcome", form=index_form)
+
 
 
 @app.route("/stream/<string:username>", methods=["GET", "POST"])

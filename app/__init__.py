@@ -8,10 +8,9 @@ from flask import Flask
 from app.config import Config
 from app.database import SQLite3
 
-# from flask_login import LoginManager
-# from flask_bcrypt import Bcrypt
-# from flask_wtf.csrf import CSRFProtect
-
+#from flask_login import LoginManager
+#from flask_bcrypt import Bcrypt
+#from flask_wtf.csrf import CSRFProtect
 # Instantiate and configure the app
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -19,8 +18,7 @@ app.config.from_object(Config)
 # Instantiate the sqlite database extension
 sqlite = SQLite3(app, schema="schema.sql")
 
-# TODO: Handle login management better, maybe with flask_login?
-# login = LoginManager(app)
+
 
 # TODO: The passwords are stored in plaintext, this is not secure at all. I should probably use bcrypt or something
 # bcrypt = Bcrypt(app)

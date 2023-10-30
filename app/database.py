@@ -19,6 +19,32 @@ from typing import Any, Optional, cast
 
 from flask import Flask, current_app, g
 
+conn = sqlite3.connect('sqlite3.db')  # Replace 'sqlite3.db' with your database file name if different
+cur = conn.cursor()
+
+# Sample data (Replace with your actual data)
+username = "sampleUser"
+first_name = "Sample"
+last_name = "User"
+hashed_password = "hashedSamplePassword"
+
+try:
+    # Insert a new user into the 'Users' table.
+    cur.execute("""
+        INSERT INTO "Users" (username, first_name, last_name, "password")
+        VALUES (?, ?, ?, ?)
+    """, (username, first_name, last_name, hashed_password))
+
+    # Commit the changes.
+    conn.commit()
+
+except sqlite3.Error as e:
+    print(f"An error occurred: {e}")
+
+finally:
+    # Close the connection.
+    conn.close()
+
 
 class SQLite3:
     """Provides a SQLite3 database extension for Flask.
