@@ -4,15 +4,28 @@ This file contains the routes for the application. It is imported by the app pac
 It also contains the SQL queries used for communicating with the database.
 """
 
+import datetime
 from pathlib import Path
+import re
+import bcrypt
 
-from flask import flash, redirect, render_template, send_from_directory, url_for
+from flask import Flask, flash, redirect, render_template, send_from_directory, session, url_for
+
 
 from app import app, sqlite
 from app.forms import CommentsForm, FriendsForm, IndexForm, PostForm, ProfileForm
+
 from werkzeug.security import generate_password_hash
+from datetime import datetime, timedelta
+from flask_bcrypt import Bcrypt
 
 
+
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    REMEMBER_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="strict",
+)
 
 @app.route("/", methods=["GET", "POST"])
 @app.route("/index", methods=["GET", "POST"])
@@ -29,6 +42,31 @@ def index():
     register_form = index_form.register
 
     if login_form.is_submitted() and login_form.submit.data:
+        if 'attempts' not in session:
+            session['attempts'] = 0
+            session['first_failed_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        
+        if login_form.is_submitted() and login_form.submit.data:
+            if 'attempts' not in session:
+                session['attempts'] = 0
+                session['first_failed_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+            # sjekker om det er er en 5 forsøk
+            if session['attempts'] >= 5:
+                if 'first_failed_time' in session:
+                    first_failed_time = datetime.strptime(session['first_failed_time'], '%Y-%m-%d %H:%M:%S')
+                    #mer enn 5, vent 1 min
+                    if datetime.now() - first_failed_time > timedelta(minutes=60):  # wait for 10 minutes
+                        # Reset the attempts and first_failed_time if 10 minutes have passed
+                        session['attempts'] = 0
+                        session.pop('first_failed_time', None)
+                    else:
+                        flash('You have exceeded your login attempts. Please wait for 60 minutes.', 'danger')
+                        return redirect(url_for('index'))
+                else:
+                    session['first_failed_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
         get_user = f"""
             SELECT *
             FROM Users
@@ -38,32 +76,36 @@ def index():
 
         if user is None:
             flash("Sorry, this user does not exist!", category="warning")
+            session['attempts'] += 1
         elif user["password"] != login_form.password.data:
             flash("Sorry, wrong password!", category="warning")
+            session['attempts'] += 1
         elif user["password"] == login_form.password.data:
+            # tiden reset
+            session.pop('attempts', None)
+            if 'first_failed_time' in session:
+                session.pop('first_failed_time', None)
             return redirect(url_for("stream", username=login_form.username.data))
 
-    elif register_form.validate_on_submit():  # This checks submission and validates inputs
-        # Create a hashed version of the password
-        hashed_password = generate_password_hash(register_form.password.data, method='sha256')
-
-        try:
-            # Use parameter substitution to prevent SQL injection
-            # '?' is a placeholder for a value that we want to insert into the database
-            # Each '?' will be replaced by the corresponding element from the tuple provided as the second argument
-            insert_user = """
-                INSERT INTO Users (username, first_name, last_name, password)
-                VALUES (?, ?, ?, ?);
-                """
-            sqlite.execute(insert_user, (register_form.username.data, register_form.first_name.data, register_form.last_name.data, hashed_password))  # Executes the SQL command safely
-
-            flash("User successfully created!", category="success")
-            return redirect(url_for("index"))
-
-        except Exception as e:  # It's better to catch specific exceptions such as sqlite3.IntegrityError for a duplicate username.
-            flash(str(e), category="error")  # You might want to customize the error message.
-
-        # If there is any failure, the code execution will continue here and render the template.
+    elif register_form.is_submitted() and register_form.submit.data:
+        insert_user = f"""
+            INSERT INTO Users (username, first_name, last_name, password)
+            VALUES ('{register_form.username.data}', '{register_form.first_name.data}', '{register_form.last_name.data}', '{register_form.password.data}');
+            """
+        #passord requirements
+        sqlite.query(insert_user)
+        pw = register_form.password.data
+        if len(pw) < 8:
+            flash("Password must be at least 8 characters long!", category="error")
+            return render_template("index.html.j2", title="Welcome", form=index_form)
+        if not re.search(r'[A-Z]', pw):
+            flash("Password must include at least one uppercase letter!", category="error")
+            return render_template("index.html.j2", title="Welcome", form=index_form)
+        if not re.search(r'[a-z]', pw):
+            flash("Password must include at least one lowercase letter!", category="error")
+            return render_template("index.html.j2", title="Welcome", form=index_form)
+        flash("User successfully created!", category="success")
+        return redirect(url_for("index"))
 
     return render_template("index.html.j2", title="Welcome", form=index_form)
 
@@ -72,11 +114,13 @@ def index():
 @app.route("/stream/<string:username>", methods=["GET", "POST"])
 def stream(username: str):
     """Provides the stream page for the application.
+    
 
     If a form was submitted, it reads the form data and inserts a new post into the database.
 
     Otherwise, it reads the username from the URL and displays all posts from the user and their friends.
     """
+
     post_form = PostForm()
     get_user = f"""
         SELECT *
