@@ -40,7 +40,7 @@ def index():
     index_form = IndexForm()
     login_form = index_form.login
     register_form = index_form.register
-
+#ENDLESS TRIES///////////////////////////////////////////////////////
     if login_form.is_submitted() and login_form.submit.data:
         if 'attempts' not in session:
             session['attempts'] = 0
@@ -86,13 +86,14 @@ def index():
             if 'first_failed_time' in session:
                 session.pop('first_failed_time', None)
             return redirect(url_for("stream", username=login_form.username.data))
+#///////////////////////////////
 
     elif register_form.is_submitted() and register_form.submit.data:
         insert_user = f"""
             INSERT INTO Users (username, first_name, last_name, password)
             VALUES ('{register_form.username.data}', '{register_form.first_name.data}', '{register_form.last_name.data}', '{register_form.password.data}');
             """
-        #passord requirements
+        #passord requirements////////////////////////////////////////////////////
         sqlite.query(insert_user)
         pw = register_form.password.data
         if len(pw) < 8:
@@ -106,6 +107,7 @@ def index():
             return render_template("index.html.j2", title="Welcome", form=index_form)
         flash("User successfully created!", category="success")
         return redirect(url_for("index"))
+    #///////////////////////////////////////////////////
 
     return render_template("index.html.j2", title="Welcome", form=index_form)
 
